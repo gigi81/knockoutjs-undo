@@ -12,6 +12,7 @@ Or with an undo context:
 
 this.firstName = ko.observable(first).extend({undo:{context: this}});
 
+The purpose of the context is to have more than one undo stack on the same page. See demo.
 
 Working demo
 ==============
