@@ -1,0 +1,73 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>Undo demo</title>
+    <link rel="stylesheet" type="text/css" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.23/themes/smoothness/jquery-ui.css">
+
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js" type="text/javascript"></script>
+	<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.23/jquery-ui.min.js" type="text/javascript"></script>
+
+	<script src="http://ajax.aspnetcdn.com/ajax/knockout/knockout-2.2.1.js" type="text/javascript"></script>
+	<script src="knockout.undo.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+        $(function() {
+			// here's my data model
+			function ViewModel(first, last) {
+				this.firstName = ko.observable(first).extend({undo:{context: this}});
+				this.lastName = ko.observable(last).extend({undo:{context: this}});
+                this.children = ko.observableArray([1,2,3]).extend({undo:{context: this}});
+			 
+				this.fullName = ko.computed(function() {
+					return this.firstName() + " " + this.lastName();
+				}, this);
+
+                this.addChild = function() {
+                    this.children.push(4);
+                };
+				
+				return this;
+			};
+			
+			var model1 = new ViewModel("Planet", "Earth");
+			ko.applyBindings(ko.undoService.createModel(model1), $("#toolbox1")[0]);
+			ko.applyBindings(model1, $("#editor1")[0]);
+			
+			var model2 = new ViewModel("Planet", "Mars");
+			ko.applyBindings(ko.undoService.createModel(model2), $("#toolbox2")[0]);
+			ko.applyBindings(model2, $("#editor2")[0]);
+        });
+    </script>
+  </head>
+  <body>
+	<div class="box" style="border: 1px solid black">
+		<div id="toolbox1">
+			<button data-bind="click: undo, enable: canUndo">Undo</button>
+			<button data-bind="click: redo, enable: canRedo">Redo</button>
+		</div>
+
+		<div id="editor1">
+			<p>First name: <input data-bind="value: firstName" /></p>
+			<p>Last name: <input data-bind="value: lastName" /></p>
+			<p><button data-bind="click: addChild">Add child</button>Children: <span data-bind="text: children"></span></p>
+			<h2>Hello, <span data-bind="text: fullName"> </span>!</h2>
+		</div>
+	</div>
+	
+	<br/><br/>
+	
+	<div class="box" style="border: 1px solid black">
+		<div id="toolbox2">
+			<button data-bind="click: undo, enable: canUndo">Undo</button>
+			<button data-bind="click: redo, enable: canRedo">Redo</button>
+		</div>
+
+		<div id="editor2">
+			<p>First name: <input data-bind="value: firstName" /></p>
+			<p>Last name: <input data-bind="value: lastName" /></p>
+			<p><button data-bind="click: addChild">Add child</button>Children: <span data-bind="text: children"></span></p>
+			<h2>Hello, <span data-bind="text: fullName"> </span>!</h2>
+		</div>
+	</div>
+  </body>
+</html>
