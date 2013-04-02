@@ -6,7 +6,7 @@ if(!Array.isArray) {
 
 ko.undoService = initUndoService();
 
-function undoStack() {
+function __undoStack() {
     var _self = {};
     var _stack = new Array();
     var _position = -1; //current position in the array
@@ -84,7 +84,7 @@ function initUndoService() {
 		if(_stack[index] != null)
 			return _stack[index];
 		
-		var stack = _stack[index] = new undoStack();
+		var stack = _stack[index] = new __undoStack();
 		//needed for computed to work
 		stack.observable = ko.observable(0);
 		
@@ -107,6 +107,8 @@ function initUndoService() {
 		stack.changed = function() {
 			stack.observable(stack.observable() + 1);
 		};
+
+        ko.subscribable.call(stack);
 		
 		return stack;
 	};
@@ -126,6 +128,8 @@ function initUndoService() {
         ctx.current().undo();
         ctx.previous();
         ctx.changed();
+        ctx.notifySubscribers({}, "undo");
+        ctx.notifySubscribers({}, "changed");
     };
 
     _self.redo = function(context) {
@@ -136,6 +140,8 @@ function initUndoService() {
 
         ctx.next().redo();
         ctx.changed();
+        ctx.notifySubscribers({}, "redo");
+        ctx.notifySubscribers({}, "changed");
     };
 	
 	_self.canUndo = function(context) {
@@ -170,7 +176,7 @@ function __getUndoValue(value) {
 }
 
 ko.extenders.undo = function(target, option) {
-    var _stack = undoStack();
+    var _stack = __undoStack();
     var _suspend = false;
 	var _context = null;
 	if(option && option.context)

@@ -36,6 +36,22 @@
 			var model2 = new ViewModel("Planet", "Mars");
 			ko.applyBindings(ko.undoService.createModel(model2), $("#toolbox2")[0]);
 			ko.applyBindings(model2, $("#editor2")[0]);
+
+            ko.undoService.getContext(model1).subscribe(function() {
+                $('<li></li>').text("model 1 undo").appendTo('#eventsLog');
+            }, model1, "undo");
+
+            ko.undoService.getContext(model1).subscribe(function() {
+                $('<li></li>').text("model 1 redo").appendTo('#eventsLog');
+            }, model1, "redo");
+
+            ko.undoService.getContext(model2).subscribe(function() {
+                $('<li></li>').text("model 2 undo").appendTo('#eventsLog');
+            }, model2, "undo");
+
+            ko.undoService.getContext(model2).subscribe(function() {
+                $('<li></li>').text("model 2 redo").appendTo('#eventsLog');
+            }, model2, "redo");
         });
     </script>
   </head>
@@ -69,5 +85,11 @@
 			<h2>Hello, <span data-bind="text: fullName"> </span>!</h2>
 		</div>
 	</div>
+
+    <br/><br/>
+
+    <div class="box" style="border: 1px solid black">
+        Events log:<ul id="eventsLog"></ul>
+    </div>
   </body>
 </html>
