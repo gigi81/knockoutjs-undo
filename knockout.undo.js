@@ -10,21 +10,33 @@ function __undoStack() {
     var _self = {};
     var _stack = new Array();
     var _position = -1; //current position in the array
+	var _maxDepth = 100;
 
     _self.current = function() {
+		//read
         if(arguments.length <= 0) {
-            //read
             if(_position < 0)
                 return null;
 
             return _stack[_position];
         }
+		//write
         else {
-            //write
+            /* add element to the stack */
             _stack[++_position] = arguments[0];
+			
+			/* if we just added an element in the middle of the stack
+			   we remove all the other elements after, so it becomes the last one */
             if((_stack.length - 1) > _position) {
                 _stack = _stack.slice(0, _position + 1);
             }
+			
+			/* limit the undo depth */
+			if(_stack.length > _maxDepth) {
+				var remove = stack.length - _maxDepth;
+				_stack = _stack.slice(remove);
+				_position -= remove;
+			}
         }
     };
 
@@ -66,11 +78,13 @@ function initUndoService() {
 	_self.MainContext = "__main";
 
 	_self.getContextIndex = function(context) {
+		/* search for the specified context */
 		for(var i = 0; i < _contexts.length; i++) {
 			if(_contexts[i] == context)
 				return i;
 		}
 		
+		/* if not found add a new context */
 		_contexts.push(context);
 		return _contexts.length - 1;
 	};
@@ -80,10 +94,12 @@ function initUndoService() {
 			context = _self.MainContext;
 		}
 
+		/* try to get an existing context */
 		var index = _self.getContextIndex(context);
 		if(_stack[index] != null)
 			return _stack[index];
 		
+		/* if not found create a new context */
 		var stack = _stack[index] = new __undoStack();
 		//needed for computed to work
 		stack.observable = ko.observable(0);
@@ -108,6 +124,7 @@ function initUndoService() {
 			stack.observable(stack.observable() + 1);
 		};
 
+		/* make the context capable of generating events */
         ko.subscribable.call(stack);
 		
 		return stack;
@@ -172,15 +189,14 @@ function __getUndoValue(value) {
     if(!Array.isArray(value))
         return value;
 
+	/* return a clone of the array */
     return value.slice(0);
 }
 
 ko.extenders.undo = function(target, option) {
     var _stack = __undoStack();
     var _suspend = false;
-	var _context = null;
-	if(option && option.context)
-		_context = option.context;
+	var _context = (option && option.context) ? option.context : null;
 	
     /* initialValue */
     _stack.current(__getUndoValue(target()));
