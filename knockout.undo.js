@@ -57,6 +57,11 @@ ko.undoStack = function() {
 	_self.position = function() {
 		return _position;
 	};
+	
+	_self.clear = function() {
+		_stack = new Array();
+		_position = -1;
+	};
 
 	return _self;
 };
@@ -83,27 +88,38 @@ ko.undoService = function() {
 	_self.createContext = function() {
 		var _stack = new ko.undoStack();
 		//needed for computed canUndo and canRedo to work
-		var _observable = ko.observable(0);
-		
-		//we need to fake a first item to init the undostack
-		_stack.current({
-			undo : function(){},
-			redo: function(){}
-		});
+		var _changes = ko.observable(0);
 		
 		_stack.canUndo = ko.computed(function() {
-			_observable(); //needed for computed to work
+			_changes(); //needed for computed to work
 			return _stack.hasPrevious();
 		}, _self);
 
 		_stack.canRedo = ko.computed(function() {
-			_observable(); //needed for computed to work
+			_changes(); //needed for computed to work
 			return _stack.hasNext();
 		}, _self);
 		
-		_stack.changed = function() {
-			_observable(_observable() + 1);
+		_stack.changed = function(change) {
+			_changes(_changes() + change);
 		};
+		
+		_stack.isChanged = ko.computed(function () {
+			return _changes() != 0;
+		});
+		
+		_stack.reset = function() {
+			_stack.clear();
+			//we need to fake a first item to init the undostack
+			_stack.current({
+				undo : function(){},
+				redo: function(){}
+			});
+			_changes(0);
+		};
+		
+		//init the context
+		_stack.reset();
 
 		/* make the context capable of generating events */
 		ko.subscribable.call(_stack);
@@ -128,7 +144,7 @@ ko.undoService = function() {
 	_self.add = function(item, context) {
 		var ctx = _self.getContext(context);
 		ctx.current(item);
-		ctx.changed();
+		ctx.changed(1);
 	};
 
 	_self.undo = function(context) {
@@ -139,7 +155,7 @@ ko.undoService = function() {
 
 		ctx.current().undo();
 		ctx.previous();
-		ctx.changed();
+		ctx.changed(-1);
 		ctx.notifySubscribers({}, "undo");
 		ctx.notifySubscribers({}, "changed");
 	};
@@ -151,7 +167,7 @@ ko.undoService = function() {
 			return;
 
 		ctx.next().redo();
-		ctx.changed();
+		ctx.changed(1);
 		ctx.notifySubscribers({}, "redo");
 		ctx.notifySubscribers({}, "changed");
 	};
@@ -164,6 +180,14 @@ ko.undoService = function() {
 		return _self.getContext(context).canRedo;
 	};
 	
+	_self.isChanged = function(context) {
+		return _self.getContext(context).isChanged;
+	};
+
+	_self.reset = function(context) {
+		return _self.getContext(context).reset;
+	};
+
 	_self.createModel = function(context) {
 		return {
 			canUndo: _self.canUndo(context),
@@ -173,7 +197,9 @@ ko.undoService = function() {
 			},
 			redo: function() {
 				_self.redo(context);
-			}
+			},
+			isChanged: _self.isChanged(context),
+			reset: _self.reset(context)
 		};
 	};
 	

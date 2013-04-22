@@ -26,6 +26,9 @@
                     this.children.push(4);
                 };
 				
+				this.isChanged = ko.undoService.isChanged(this);
+				this.reset = ko.undoService.reset(this);
+				
 				return this;
 			};
 			
@@ -54,15 +57,22 @@
             }, model2, "redo");
         });
     </script>
+	
+	<style>
+		.changed {
+			background: Peru;
+		}
+	</style>
   </head>
   <body>
 	<div class="box" style="border: 1px solid black">
 		<div id="toolbox1">
 			<button data-bind="click: undo, enable: canUndo">Undo</button>
 			<button data-bind="click: redo, enable: canRedo">Redo</button>
+			<button data-bind="click: reset, enable: isChanged">Reset</button>
 		</div>
 
-		<div id="editor1">
+		<div id="editor1" data-bind="css: {changed: isChanged}">
 			<p>First name: <input data-bind="value: firstName" /></p>
 			<p>Last name: <input data-bind="value: lastName" /></p>
 			<p><button data-bind="click: addChild">Add child</button>Children: <span data-bind="text: children"></span></p>
@@ -76,9 +86,10 @@
 		<div id="toolbox2">
 			<button data-bind="click: undo, enable: canUndo">Undo</button>
 			<button data-bind="click: redo, enable: canRedo">Redo</button>
+			<button data-bind="click: reset, enable: isChanged">Reset</button>
 		</div>
 
-		<div id="editor2">
+		<div id="editor2" data-bind="css: {changed: isChanged}">
 			<p>First name: <input data-bind="value: firstName" /></p>
 			<p>Last name: <input data-bind="value: lastName" /></p>
 			<p><button data-bind="click: addChild">Add child</button>Children: <span data-bind="text: children"></span></p>
