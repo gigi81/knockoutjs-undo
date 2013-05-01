@@ -182,13 +182,36 @@ ko.undoService = function() {
 		};
 		
 		ctx.setChangesSource = function(source) {
+			ctx.getCurrent().source = null;
 			_source = source;
 		};
 		
 		ctx.resetChangesSource = function() {
-			_source = null;
+			ctx.setChangesSource(null);
+		};
+		
+		var _setSource = function(){
+			ctx.setChangesSource($(this)[0]);
+			if(console)
+				console.log('undo source is ' + $(this)[0].nodeName);
 		};
 
+		ctx.bindSources = function(element) {
+			$(element).find('input').bind('focusin', _setSource);
+			$(element).find('textarea').bind('focusin', _setSource);
+			$(element).find('select').bind('focusin', _setSource);
+			$(element).find('button').bind('click', _setSource);
+			$(element).find('a').bind('click', _setSource);
+		};
+
+		ctx.unbindSources = function(element) {
+			$(element).find('input').unbind('focusin', _setSource);
+			$(element).find('textarea').unbind('focusin', _setSource);
+			$(element).find('select').unbind('focusin', _setSource);
+			$(element).find('button').unbind('click', _setSource);
+			$(element).find('a').unbind('click', _setSource);
+		};
+		
 		//init the context
 		ctx.resetChanges();
 
@@ -288,3 +311,18 @@ ko.extenders.undo = function(target, option) {
     return target;
 };
 
+// override of the ko.applyBindings method
+ko.applyBindings = (function() {
+	var base = ko.applyBindings;
+	
+	return function() {
+		var context = (arguments[0] ? arguments[0] : null);
+		var element = (arguments[1] ? arguments[1] : document);
+		
+		//must be applied before knockout bindings are applied
+		ko.undoService.getContext(context).bindSources(element);
+		
+		//apply knockout bindings
+		base.apply(this, arguments);
+	};
+})();

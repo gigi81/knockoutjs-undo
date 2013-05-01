@@ -27,11 +27,8 @@
                 };
 							
 				this.multipleChanges = function() {
-					var source = {};
-					this.setChangesSource(source);
 					this.firstName('xxx');
 					this.lastName('yyy');
-					this.resetChangesSource();
 				};
 				
 				return this;
@@ -45,20 +42,24 @@
 			ko.applyBindings(model2, $("#editor2")[0]);
 
             ko.undoService.getContext(model1).subscribe(function() {
-                $('<li></li>').text("model 1 undo").appendTo('#eventsLog');
+                appendToLog("model 1 undo");
             }, model1, "undo");
 
             ko.undoService.getContext(model1).subscribe(function() {
-                $('<li></li>').text("model 1 redo").appendTo('#eventsLog');
+                appendToLog("model 1 redo");
             }, model1, "redo");
 
             ko.undoService.getContext(model2).subscribe(function() {
-                $('<li></li>').text("model 2 undo").appendTo('#eventsLog');
+                appendToLog("model 2 undo");
             }, model2, "undo");
 
             ko.undoService.getContext(model2).subscribe(function() {
-                $('<li></li>').text("model 2 redo").appendTo('#eventsLog');
+                appendToLog("model 2 redo");
             }, model2, "redo");
+			
+			function appendToLog(message) {
+				$('<li></li>').text(message).appendTo('#eventsLog');
+			}
         });
     </script>
 	
