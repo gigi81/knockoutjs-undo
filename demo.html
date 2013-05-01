@@ -25,49 +25,88 @@
                 this.addChild = function() {
                     this.children.push(4);
                 };
+							
+				this.multipleChanges = function() {
+					this.firstName('xxx');
+					this.lastName('yyy');
+				};
 				
 				return this;
 			};
 			
 			var model1 = new ViewModel("Planet", "Earth");
-			ko.applyBindings(ko.undoService.createModel(model1), $("#toolbox1")[0]);
 			ko.applyBindings(model1, $("#editor1")[0]);
 			
 			var model2 = new ViewModel("Planet", "Mars");
-			ko.applyBindings(ko.undoService.createModel(model2), $("#toolbox2")[0]);
+			//model2.isChanged(true);
 			ko.applyBindings(model2, $("#editor2")[0]);
+
+            ko.undoService.getContext(model1).subscribe(function() {
+                appendToLog("model 1 undo");
+            }, model1, "undo");
+
+            ko.undoService.getContext(model1).subscribe(function() {
+                appendToLog("model 1 redo");
+            }, model1, "redo");
+
+            ko.undoService.getContext(model2).subscribe(function() {
+                appendToLog("model 2 undo");
+            }, model2, "undo");
+
+            ko.undoService.getContext(model2).subscribe(function() {
+                appendToLog("model 2 redo");
+            }, model2, "redo");
+			
+			function appendToLog(message) {
+				$('<li></li>').text(message).appendTo('#eventsLog');
+			}
         });
     </script>
+	
+	<style>
+		.changed {
+			background: Peru;
+		}
+	</style>
   </head>
   <body>
-	<div class="box" style="border: 1px solid black">
+	<div id="editor1" class="box" style="border: 1px solid black">
 		<div id="toolbox1">
 			<button data-bind="click: undo, enable: canUndo">Undo</button>
 			<button data-bind="click: redo, enable: canRedo">Redo</button>
+			<button data-bind="click: resetChanges, enable: isChanged">Reset</button>
 		</div>
 
-		<div id="editor1">
+		<div data-bind="css: {changed: isChanged}">
 			<p>First name: <input data-bind="value: firstName" /></p>
 			<p>Last name: <input data-bind="value: lastName" /></p>
 			<p><button data-bind="click: addChild">Add child</button>Children: <span data-bind="text: children"></span></p>
 			<h2>Hello, <span data-bind="text: fullName"> </span>!</h2>
+			<button data-bind="click: multipleChanges">Multiple</button>
 		</div>
 	</div>
 	
 	<br/><br/>
 	
-	<div class="box" style="border: 1px solid black">
+	<div id="editor2" class="box" style="border: 1px solid black">
 		<div id="toolbox2">
 			<button data-bind="click: undo, enable: canUndo">Undo</button>
 			<button data-bind="click: redo, enable: canRedo">Redo</button>
+			<button data-bind="click: resetChanges, enable: isChanged">Reset</button>
 		</div>
 
-		<div id="editor2">
+		<div data-bind="css: {changed: isChanged}">
 			<p>First name: <input data-bind="value: firstName" /></p>
 			<p>Last name: <input data-bind="value: lastName" /></p>
 			<p><button data-bind="click: addChild">Add child</button>Children: <span data-bind="text: children"></span></p>
 			<h2>Hello, <span data-bind="text: fullName"> </span>!</h2>
 		</div>
 	</div>
+
+    <br/><br/>
+
+    <div class="box" style="border: 1px solid black">
+        Events log:<ul id="eventsLog"></ul>
+    </div>
   </body>
 </html>

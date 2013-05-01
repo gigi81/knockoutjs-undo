@@ -1,78 +1,249 @@
-if(!Array.isArray) {
-	Array.isArray = function (vArg) {
-		return Object.prototype.toString.call(vArg) === "[object Array]";
+ko.undoStack = function() {
+	var _self = {};
+	var _values = new Array();
+	var _position = -1; //current position in the array
+	var _maxDepth = 100;
+
+    _self.getCurrent = function() {
+        if (_position < 0)
+            return null;
+
+        return _values[_position];
+    };
+    
+    _self.setCurrent = function (value) {
+		/* add element to the stack */
+		_values[++_position] = value;
+			
+		/* if we just added an element in the middle of the stack
+			we remove all the other elements after, so it becomes the last one */
+		if((_values.length - 1) > _position) {
+			_values = _values.slice(0, _position + 1);
+		}
+			
+		/* limit the undo depth */
+		if(_values.length > _maxDepth) {
+			var remove = stack.length - _maxDepth;
+			_values = _values.slice(remove);
+			_position -= remove;
+		}
 	};
-}
 
-ko.undoService = initUndoService();
+	_self.previous = function() {
+		if(!_self.hasPrevious())
+			return;
 
-function undoStack() {
-    var _self = {};
-    var _stack = new Array();
-    var _position = -1; //current position in the array
+		return _values[--_position];
+	};
 
-    _self.current = function() {
-        if(arguments.length <= 0) {
-            //read
-            if(_position < 0)
-                return null;
+	_self.next = function() {
+		if(!_self.hasNext())
+			return;
 
-            return _stack[_position];
-        }
-        else {
-            //write
-            _stack[++_position] = arguments[0];
-            if((_stack.length - 1) > _position) {
-                _stack = _stack.slice(0, _position + 1);
-            }
-        }
-    };
+		return _values[++_position];
+	};
 
-    _self.previous = function() {
-        if(!_self.hasPrevious())
-            return;
+	_self.hasPrevious = function() {
+		return _position > 0;
+	};
 
-        return _stack[--_position];
-    };
+	_self.hasNext = function() {
+		return _position < (_values.length - 1);
+	};
 
-    _self.next = function() {
-        if(!_self.hasNext())
-            return;
+	_self.position = function() {
+		return _position;
+	};
+	
+	_self.clear = function() {
+		_values = new Array();
+		_position = -1;
+	};
 
-        return _stack[++_position];
-    };
+	return _self;
+};
 
-    _self.hasPrevious = function() {
-        return _position > 0;
-    };
-
-    _self.hasNext = function() {
-        return _position < (_stack.length - 1);
-    };
-
-    _self.position = function() {
-        return _position;
-    };
-
-    return _self;
-}
-
-
-function initUndoService() {
-    var _self = {};
+ko.undoService = function() {
+	var _self = {};
 	var _contexts = new Array();
-    var _stack = new Array();
+	var _stack = new Array();
 	
 	_self.MainContext = "__main";
 
 	_self.getContextIndex = function(context) {
+		/* search for the specified context */
 		for(var i = 0; i < _contexts.length; i++) {
 			if(_contexts[i] == context)
 				return i;
 		}
 		
+		/* if not found add a new context */
 		_contexts.push(context);
 		return _contexts.length - 1;
+	};
+	
+	_self.createContext = function() {
+		var ctx = new ko.undoStack();
+		//needed for computed canUndo and canRedo to work
+		var _changes = ko.observable(0);
+		var _source = null;
+		
+		var _createUndoItem = function(item) {
+			var self = {};
+			
+			if(item == null) {
+				item = {
+					undo : function(){},
+					redo: function(){}
+				};
+			};
+			
+			self.source = _source;
+			self.items = [item];
+			self.undo = function() {
+				for(var i = self.items.length - 1; i >= 0; i--) {
+					self.items[i].undo();
+				}
+			};
+			self.redo = function() {
+				for(var i=0; i < self.items.length; i++) {
+					self.items[i].redo();
+				}
+			};
+			
+			return self;
+		};
+		
+		ctx.canUndo = ko.computed(function() {
+			_changes(); //needed for computed to work
+			return ctx.hasPrevious();
+		}, _self);
+
+		ctx.canRedo = ko.computed(function() {
+			_changes(); //needed for computed to work
+			return ctx.hasNext();
+		}, _self);
+		
+		ctx.changed = function(change) {
+			_changes(_changes() + change);
+		};
+		
+		ctx.isChanged = ko.computed({
+			read: function () {
+				return _changes() != 0;
+			},
+			write: function (value) {
+				_changes(value ? 1 : 0);
+			},
+			owner: ctx
+		});
+		
+		ctx.resetChanges = function() {
+			ctx.clear();
+			//we need to fake a first item to init the undostack
+			ctx.setCurrent(_createUndoItem());
+			_changes(0);
+		};
+
+	    ctx.undo = function() {
+	        if (!ctx.hasPrevious())
+	            return;
+
+	        ctx.getCurrent().source = null;
+	        ctx.getCurrent().undo();
+	        ctx.previous();
+	        ctx.changed(-1);
+	        ctx.notifySubscribers({}, "undo");
+	        ctx.notifySubscribers({}, "changed");
+	    };
+		
+		ctx.redo = function() {
+			if(!ctx.hasNext())
+				return;
+
+			ctx.next().redo();
+			ctx.changed(1);
+			ctx.notifySubscribers({}, "redo");
+			ctx.notifySubscribers({}, "changed");
+		};
+		
+		ctx.add = function(item) {
+			var current = ctx.getCurrent();
+			
+			//if the source is not changed add the item to the current change set
+			if((_source != null) && (current.source === _source)) {
+				current.items.push(item);
+			}
+			else {
+				current.source = null;
+				ctx.setCurrent(_createUndoItem(item));
+				ctx.changed(1);
+			}
+		};
+		
+		ctx.setChangesSource = function(source) {
+			ctx.getCurrent().source = null;
+			_source = source;
+		};
+		
+		ctx.resetChangesSource = function() {
+			ctx.setChangesSource(null);
+		};
+		
+		var _setSource = function(){
+			ctx.setChangesSource($(this)[0]);
+			if(console)
+				console.log('undo source is ' + $(this)[0].nodeName);
+		};
+
+		ctx.bindSources = function(element) {
+			$(element).find('input').bind('focusin', _setSource);
+			$(element).find('textarea').bind('focusin', _setSource);
+			$(element).find('select').bind('focusin', _setSource);
+			$(element).find('button').bind('click', _setSource);
+			$(element).find('a').bind('click', _setSource);
+		};
+
+		ctx.unbindSources = function(element) {
+			$(element).find('input').unbind('focusin', _setSource);
+			$(element).find('textarea').unbind('focusin', _setSource);
+			$(element).find('select').unbind('focusin', _setSource);
+			$(element).find('button').unbind('click', _setSource);
+			$(element).find('a').unbind('click', _setSource);
+		};
+		
+		//init the context
+		ctx.resetChanges();
+
+		/* make the context capable of generating events */
+		ko.subscribable.call(ctx);
+		
+		return ctx;
+	};
+	
+	_self.undoable = function(context, ctx) {
+		if(ctx == null) {
+			ctx = _self.getContext(context);
+		}
+	
+		context.canUndo = ctx.canUndo;
+		context.canRedo = ctx.canRedo;
+		context.undo = function() {
+			ctx.undo();
+		};
+		context.redo = function() {
+			ctx.redo();
+		};
+		context.isChanged = ctx.isChanged;
+		context.resetChanges = function() {
+			ctx.resetChanges();
+		};
+		context.setChangesSource = function(source) {
+			ctx.setChangesSource(source);
+		};
+		context.resetChangesSource = function() {
+			ctx.resetChangesSource();
+		};
 	};
 	
 	_self.getContext = function(context) {
@@ -80,131 +251,78 @@ function initUndoService() {
 			context = _self.MainContext;
 		}
 
+		/* try to get an existing context */
 		var index = _self.getContextIndex(context);
 		if(_stack[index] != null)
 			return _stack[index];
-		
-		var stack = _stack[index] = new undoStack();
-		//needed for computed to work
-		stack.observable = ko.observable(0);
-		
-		//we need a fake first item to init the undostack
-		stack.current({
-			undo : function(){},
-			redo: function(){}
-		});
-		
-		stack.canUndo = ko.computed(function() {
-			stack.observable(); //needed for computed to work
-			return stack.hasPrevious();
-		}, _self);
 
-		stack.canRedo = ko.computed(function() {
-			stack.observable(); //needed for computed to work
-			return stack.hasNext();
-		}, _self);
-		
-		stack.changed = function() {
-			stack.observable(stack.observable() + 1);
-		};
-		
-		return stack;
+		/* if not found create a new context */
+		var ret = _stack[index] = _self.createContext();
+		_self.undoable(context, ret); //mixin the undo methods and properties
+		return ret;
 	};
 	
-    _self.add = function(item, context) {
-		var ctx = _self.getContext(context);
-        ctx.current(item);
-        ctx.changed();
-    };
+	_self.getValue = function(value) {
+		//if it's not an array just return it
+		if(Object.prototype.toString.call(value) !== "[object Array]")
+			return value;
 
-    _self.undo = function(context) {
-		var ctx = _self.getContext(context);
-		
-        if(!ctx.hasPrevious())
-            return;
-
-        ctx.current().undo();
-        ctx.previous();
-        ctx.changed();
-    };
-
-    _self.redo = function(context) {
-		var ctx = _self.getContext(context);
-		
-        if(!ctx.hasNext())
-            return;
-
-        ctx.next().redo();
-        ctx.changed();
-    };
-	
-	_self.canUndo = function(context) {
-		return _self.getContext(context).canUndo;
+		/* return a clone of the array */
+		return value.slice(0);
 	};
 
-	_self.canRedo = function(context) {
-		return _self.getContext(context).canRedo;
-	};
-	
-	_self.createModel = function(context) {
-		return {
-			canUndo: _self.canUndo(context),
-			canRedo: _self.canRedo(context),
-			undo: function() {
-				_self.undo(context);
-			},
-			redo: function() {
-				_self.redo(context);
-			}
-		};
-	}
-
-    return _self;
-};
-
-function __getUndoValue(value) {
-    if(!Array.isArray(value))
-        return value;
-
-    return value.slice(0);
-}
+	return _self;
+}();
 
 ko.extenders.undo = function(target, option) {
-    var _stack = undoStack();
+    var _stack = new ko.undoStack();
     var _suspend = false;
-	var _context = null;
-	if(option && option.context)
-		_context = option.context;
+	var _context = ko.undoService.getContext((option && option.context) ? option.context : null);
 	
     /* initialValue */
-    _stack.current(__getUndoValue(target()));
+    _stack.setCurrent(ko.undoService.getValue(target()));
 
     var _subscription = target.subscribe(function(newValue) {
         if(_suspend)
             return;
 
-        _stack.current(__getUndoValue(newValue));
-        ko.undoService.add(target, _context);
+        _stack.setCurrent(ko.undoService.getValue(newValue));
+        _context.add(target);
     });
 
     target.undo = function() {
-        if(!_stack.hasPrevious())
+        if (!_stack.hasPrevious())
             return;
 
         _suspend = true;
-        target(_stack.previous());
+        target(ko.undoService.getValue(_stack.previous()));
         _suspend = false;
-    }
+    };
 
     target.redo = function() {
-        if(!_stack.hasNext())
+        if (!_stack.hasNext())
             return;
 
         _suspend = true;
-        target(_stack.next());
+        target(ko.undoService.getValue(_stack.next()));
         _suspend = false;
-    }
+    };
 
     return target;
 };
 
+// override of the ko.applyBindings method
+ko.applyBindings = (function() {
+	var base = ko.applyBindings;
+	
+	return function() {
+		var context = (arguments[0] ? arguments[0] : null);
+		var element = (arguments[1] ? arguments[1] : document);
+		
+		//must be applied before knockout bindings are applied
+		ko.undoService.getContext(context).bindSources(element);
+		
+		//apply knockout bindings
+		base.apply(this, arguments);
+	};
+})();
