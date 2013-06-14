@@ -67,6 +67,7 @@ ko.undoService = function() {
 	var _self = {};
 	var _contexts = new Array();
 	var _stack = new Array();
+    var _index = 0;
 	
 	_self.MainContext = "__main";
 
@@ -81,6 +82,15 @@ ko.undoService = function() {
 		_contexts.push(context);
 		return _contexts.length - 1;
 	};
+
+    _self.setSource = function() {
+        for (var i = 0; i < _contexts.length; i++) {
+            _contexts[i].setChangesSource($(this)[0]);
+        };
+        
+        if (console)
+            console.log('undo source is ' + $(this)[0].nodeName);
+    };
 	
 	_self.createContext = function() {
 		var ctx = new ko.undoStack();
@@ -113,6 +123,10 @@ ko.undoService = function() {
 			
 			return self;
 		};
+
+	    ctx.contextIndex = _index++;
+
+	    ctx.isUndoing = false;
 		
 		ctx.canUndo = ko.computed(function() {
 			_changes(); //needed for computed to work
@@ -142,6 +156,7 @@ ko.undoService = function() {
 			ctx.clear();
 			//we need to fake a first item to init the undostack
 			ctx.setCurrent(_createUndoItem());
+		    ctx.resetChangesSource();
 			_changes(0);
 		};
 
@@ -149,10 +164,12 @@ ko.undoService = function() {
 	        if (!ctx.hasPrevious())
 	            return;
 
+	        ctx.isUndoing = true;
 	        ctx.getCurrent().source = null;
 	        ctx.getCurrent().undo();
 	        ctx.previous();
 	        ctx.changed(-1);
+	        ctx.isUndoing = false;
 	        ctx.notifySubscribers({}, "undo");
 	        ctx.notifySubscribers({}, "changed");
 	    };
@@ -161,8 +178,10 @@ ko.undoService = function() {
 			if(!ctx.hasNext())
 				return;
 
+            ctx.isUndoing = true;
 			ctx.next().redo();
 			ctx.changed(1);
+		    ctx.isUndoing = false;
 			ctx.notifySubscribers({}, "redo");
 			ctx.notifySubscribers({}, "changed");
 		};
@@ -182,36 +201,15 @@ ko.undoService = function() {
 		};
 		
 		ctx.setChangesSource = function(source) {
-			ctx.getCurrent().source = null;
+		    var current = ctx.getCurrent();
+			current.source = null;
 			_source = source;
 		};
 		
 		ctx.resetChangesSource = function() {
 			ctx.setChangesSource(null);
 		};
-		
-		var _setSource = function(){
-			ctx.setChangesSource($(this)[0]);
-			if(console)
-				console.log('undo source is ' + $(this)[0].nodeName);
-		};
 
-		ctx.bindSources = function(element) {
-			$(element).find('input').bind('focusin', _setSource);
-			$(element).find('textarea').bind('focusin', _setSource);
-			$(element).find('select').bind('focusin', _setSource);
-			$(element).find('button').bind('click', _setSource);
-			$(element).find('a').bind('click', _setSource);
-		};
-
-		ctx.unbindSources = function(element) {
-			$(element).find('input').unbind('focusin', _setSource);
-			$(element).find('textarea').unbind('focusin', _setSource);
-			$(element).find('select').unbind('focusin', _setSource);
-			$(element).find('button').unbind('click', _setSource);
-			$(element).find('a').unbind('click', _setSource);
-		};
-		
 		//init the context
 		ctx.resetChanges();
 
@@ -221,6 +219,22 @@ ko.undoService = function() {
 		return ctx;
 	};
 	
+	_self.bindSources = function(element) {
+		$(element).find('input').bind('focusin', _self.setSource);
+		$(element).find('textarea').bind('focusin', _self.setSource);
+		$(element).find('select').bind('focusin', _self.setSource);
+		$(element).find('button').bind('click', _self.setSource);
+		$(element).find('a').bind('click', _self.setSource);
+	};
+
+	_self.unbindSources = function(element) {
+		$(element).find('input').unbind('focusin', _self.setSource);
+		$(element).find('textarea').unbind('focusin', _self.setSource);
+		$(element).find('select').unbind('focusin', _self.setSource);
+		$(element).find('button').unbind('click', _self.setSource);
+		$(element).find('a').unbind('click', _self.setSource);
+	};
+
 	_self.undoable = function(context, ctx) {
 		if(ctx == null) {
 			ctx = _self.getContext(context);
@@ -244,6 +258,9 @@ ko.undoService = function() {
 		context.resetChangesSource = function() {
 			ctx.resetChangesSource();
 		};
+	    context.isUndoing = function() {
+	        return ctx.isUndoing;
+	    };
 	};
 	
 	_self.getContext = function(context) {
@@ -316,11 +333,10 @@ ko.applyBindings = (function() {
 	var base = ko.applyBindings;
 	
 	return function() {
-		var context = (arguments[0] ? arguments[0] : null);
-		var element = (arguments[1] ? arguments[1] : document);
+		var element = (arguments[1] || document);
 		
 		//must be applied before knockout bindings are applied
-		ko.undoService.getContext(context).bindSources(element);
+		ko.undoService.bindSources(element);
 		
 		//apply knockout bindings
 		base.apply(this, arguments);
